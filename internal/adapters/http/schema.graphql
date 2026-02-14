@@ -1,0 +1,113 @@
+scalar DateTime
+
+type Query {
+  """
+  Find stops near a location
+  """
+  stopsNearby(lat: Float!, lon: Float!, radius: Float = 500): [Stop!]!
+
+  """
+  Get route with real-time positions
+  """
+  route(id: ID!): Route
+
+  """
+  Search stops with fuzzy matching
+  """
+  searchStops(query: String!, near: LocationInput): [Stop!]!
+
+  """
+  Get trip with schedule and real-time
+  """
+  trip(id: ID!): Trip
+
+  """
+  Find routes between two stops
+  """
+  routesBetween(from: ID!, to: ID!, time: DateTime): [Journey!]!
+}
+
+type Stop {
+  id: ID!
+  name: String!
+  location: GeoPoint!
+  routes: [Route!]!
+  nextDepartures(limit: Int = 5): [Departure!]!
+  wheelchairAccessible: Boolean!
+}
+
+type Route {
+  id: ID!
+  shortName: String
+  longName: String!
+  color: String!
+  textColor: String!
+  shape: GeoLineString
+  vehicles: [Vehicle!]!
+}
+
+type Trip {
+  id: ID!
+  tripId: String!
+  headsign: String
+  route: Route!
+  stopTimes: [StopTime!]!
+}
+
+type StopTime {
+  stop: Stop!
+  arrivalTime: String!
+  departureTime: String!
+  stopSequence: Int!
+}
+
+type Vehicle {
+  id: ID!
+  location: GeoPoint!
+  bearing: Float
+  speed: Float
+  congestion: CongestionLevel
+  trip: Trip
+}
+
+type Departure {
+  trip: Trip!
+  scheduledTime: DateTime!
+  estimatedTime: DateTime
+  delay: Int
+  platform: String
+}
+
+type Journey {
+  legs: [JourneyLeg!]!
+  duration: Int!
+}
+
+type JourneyLeg {
+  route: Route!
+  fromStop: Stop!
+  toStop: Stop!
+  departure: Departure!
+}
+
+type GeoPoint {
+  lat: Float!
+  lon: Float!
+}
+
+type GeoLineString {
+  coordinates: [[Float!]!]!
+}
+
+input LocationInput {
+  lat: Float!
+  lon: Float!
+}
+
+enum CongestionLevel {
+  UNKNOWN
+  RUNNING_SMOOTHLY
+  STOP_AND_GO
+  CONGESTION
+  SEVERE_CONGESTION
+}

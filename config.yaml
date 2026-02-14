@@ -1,0 +1,23 @@
+server:
+  port: 8080
+  read_timeout: 10
+  write_timeout: 10
+
+database:
+  host: localhost
+  port: 5433
+  user: transit
+  password: "bilbopass2024"
+  dbname: bilbopass
+  sslmode: disable
+
+nats:
+  url: nats://localhost:4222
+
+valkey:
+  addr: localhost:6379
+
+telemetry:
+  service_name: bilbopass
+  tempo_addr: localhost:4317
+  enabled: false

@@ -1,0 +1,84 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE: api
+    ports:
+      - "8080:8080"
+    environment:
+      BILBOPASS_DATABASE_HOST: timescale
+      BILBOPASS_DATABASE_PORT: "5432"
+      BILBOPASS_DATABASE_USER: transit
+      BILBOPASS_DATABASE_PASSWORD: ${DB_PASSWORD}
+      BILBOPASS_DATABASE_DBNAME: bilbopass
+      BILBOPASS_DATABASE_SSLMODE: disable
+      BILBOPASS_NATS_URL: nats://nats:4222
+      BILBOPASS_VALKEY_ADDR: valkey:6379
+      BILBOPASS_TELEMETRY_ENABLED: "true"
+      BILBOPASS_TELEMETRY_TEMPO_ADDR: tempo:4317
+    depends_on:
+      timescale:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      valkey:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  realtime:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE: realtime
+    environment:
+      BILBOPASS_DATABASE_HOST: timescale
+      BILBOPASS_DATABASE_PORT: "5432"
+      BILBOPASS_DATABASE_USER: transit
+      BILBOPASS_DATABASE_PASSWORD: ${DB_PASSWORD}
+      BILBOPASS_DATABASE_DBNAME: bilbopass
+      BILBOPASS_DATABASE_SSLMODE: disable
+      BILBOPASS_NATS_URL: nats://nats:4222
+    depends_on:
+      timescale:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  ingestor:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+      args:
+        SERVICE: ingestor
+    environment:
+      BILBOPASS_DATABASE_HOST: timescale
+      BILBOPASS_DATABASE_PORT: "5432"
+      BILBOPASS_DATABASE_USER: transit
+      BILBOPASS_DATABASE_PASSWORD: ${DB_PASSWORD}
+      BILBOPASS_DATABASE_DBNAME: bilbopass
+      BILBOPASS_DATABASE_SSLMODE: disable
+    depends_on:
+      timescale:
+        condition: service_healthy
+    profiles:
+      - tools

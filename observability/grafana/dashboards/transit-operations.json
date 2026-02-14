@@ -1,0 +1,194 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Vehicle Positions (last 1h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM vehicle_positions WHERE recorded_at > now() - interval '1 hour';",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 100 },
+              { "color": "green", "value": 1000 }
+            ]
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "Active Agencies",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM agencies;",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": 0 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Total Stops",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM stops;",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Total Routes",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM routes;",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Vehicle Positions Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT time_bucket('5 minutes', recorded_at) AS time, count(*) as positions FROM vehicle_positions WHERE recorded_at > now() - interval '24 hours' GROUP BY time ORDER BY time;",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
+            "lineWidth": 2
+          },
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "title": "Delay Events (last 24h)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT time_bucket('30 minutes', detected_at) AS time, count(*) as delays, avg(delay_seconds) as avg_delay_s FROM delay_events WHERE detected_at > now() - interval '24 hours' GROUP BY time ORDER BY time;",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          },
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "title": "Vehicles by Agency (Top 10)",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT agency_id, count(DISTINCT vehicle_id) as vehicles FROM vehicle_positions WHERE recorded_at > now() - interval '1 hour' GROUP BY agency_id ORDER BY vehicles DESC LIMIT 10;",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "blue", "value": 0 },
+              { "color": "green", "value": 10 },
+              { "color": "yellow", "value": 50 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Delays by Route (Top 10)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT r.short_name, r.long_name, count(d.*) as delay_count, round(avg(d.delay_seconds)::numeric, 0) as avg_delay_s, max(d.delay_seconds) as max_delay_s FROM delay_events d JOIN routes r ON d.route_id = r.route_id WHERE d.detected_at > now() - interval '24 hours' GROUP BY r.short_name, r.long_name ORDER BY delay_count DESC LIMIT 10;",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Stops Per Agency",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT a.name as agency, count(s.*) as stops FROM stops s JOIN agencies a ON s.agency_id = a.slug GROUP BY a.name ORDER BY stops DESC LIMIT 15;",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Recent Delay Events",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT detected_at, agency_id, route_id, trip_id, stop_id, delay_seconds FROM delay_events ORDER BY detected_at DESC LIMIT 20;",
+          "format": "table"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["transit", "bilbopass"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "Europe/Madrid",
+  "title": "BilboPass Transit Operations",
+  "uid": "bilbopass-transit-ops",
+  "version": 1,
+  "refresh": "30s"
+}

@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package bilbopass.v1;
+
+option go_package = "github.com/yourusername/bilbopass/internal/proto/bilbopassv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Vehicle position from GTFS-RT feed.
+message VehiclePosition {
+  string vehicle_id = 1;
+  string trip_id = 2;
+  string route_id = 3;
+  Position position = 4;
+  float bearing = 5;
+  float speed = 6;
+  int32 congestion_level = 7;
+  int32 occupancy_status = 8;
+  google.protobuf.Timestamp timestamp = 9;
+}
+
+message Position {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+// Trip update from GTFS-RT feed.
+message TripUpdate {
+  string trip_id = 1;
+  string route_id = 2;
+  repeated StopTimeUpdate stop_time_updates = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message StopTimeUpdate {
+  string stop_id = 1;
+  int32 stop_sequence = 2;
+  StopTimeEvent arrival = 3;
+  StopTimeEvent departure = 4;
+}
+
+message StopTimeEvent {
+  int32 delay = 1;  // seconds
+  google.protobuf.Timestamp time = 2;
+}
+
+// Service alert from GTFS-RT feed.
+message ServiceAlert {
+  string alert_id = 1;
+  repeated string route_ids = 2;
+  repeated string stop_ids = 3;
+  string header_text = 4;
+  string description_text = 5;
+  Severity severity = 6;
+  google.protobuf.Timestamp start = 7;
+  google.protobuf.Timestamp end = 8;
+}
+
+enum Severity {
+  SEVERITY_UNKNOWN = 0;
+  SEVERITY_INFO = 1;
+  SEVERITY_WARNING = 2;
+  SEVERITY_SEVERE = 3;
+}
+
+// Internal gRPC service for inter-service communication.
+service TransitService {
+  rpc GetVehiclePositions(GetVehiclePositionsRequest) returns (GetVehiclePositionsResponse);
+  rpc StreamVehiclePositions(StreamRequest) returns (stream VehiclePosition);
+  rpc GetTripUpdates(GetTripUpdatesRequest) returns (GetTripUpdatesResponse);
+}
+
+message GetVehiclePositionsRequest {
+  string route_id = 1;
+}
+
+message GetVehiclePositionsResponse {
+  repeated VehiclePosition positions = 1;
+}
+
+message StreamRequest {
+  repeated string route_ids = 1;
+}
+
+message GetTripUpdatesRequest {
+  string trip_id = 1;
+}
+
+message GetTripUpdatesResponse {
+  repeated TripUpdate updates = 1;
+}

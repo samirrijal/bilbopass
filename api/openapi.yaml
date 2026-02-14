@@ -1,0 +1,689 @@
+openapi: "3.0.3"
+info:
+  title: BilboPass Transit API
+  description: Real-time transit platform for Bilbao and the Basque Country
+  version: "1.0.0"
+  contact:
+    name: BilboPass
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /v1/health:
+    get:
+      summary: Liveness check
+      tags: [System]
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: healthy }
+                  uptime: { type: string, example: "2h35m12s" }
+                  version: { type: string, example: dev }
+
+  /v1/ready:
+    get:
+      summary: Readiness check (DB, NATS, cache)
+      tags: [System]
+      responses:
+        "200":
+          description: All dependencies ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ready }
+                  checks:
+                    type: object
+                    properties:
+                      database: { type: string, example: ok }
+                      nats: { type: string, example: ok }
+                      cache: { type: string, example: ok }
+        "503":
+          description: One or more dependencies not ready
+
+  /v1/agencies:
+    get:
+      summary: List all transit agencies
+      tags: [Agencies]
+      parameters:
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 200 }
+      responses:
+        "200":
+          description: Paginated list of agencies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAgencies"
+
+  /v1/stops/nearby:
+    get:
+      summary: Find stops near a location
+      tags: [Stops]
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number, format: double, example: 43.263 }
+        - name: lon
+          in: query
+          required: true
+          schema: { type: number, format: double, example: -2.935 }
+        - name: radius
+          in: query
+          schema: { type: number, default: 500, maximum: 10000 }
+          description: Radius in meters
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        "200":
+          description: List of nearby stops with distances
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Stop"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/stops/search:
+    get:
+      summary: Fuzzy search stops by name
+      tags: [Stops]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, example: Abando }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        "200":
+          description: Matching stops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Stop"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/stops/batch:
+    get:
+      summary: Get multiple stops by IDs
+      tags: [Stops]
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema: { type: string, example: "550e8400-e29b-41d4-a716-446655440000,660e8400-e29b-41d4-a716-446655440000" }
+          description: Comma-separated list of stop IDs (max 100)
+      responses:
+        "200":
+          description: List of stops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Stop"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/stops/{id}:
+    get:
+      summary: Get a stop by ID
+      tags: [Stops]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Stop details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stop"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/stops/{id}/departures:
+    get:
+      summary: Next departures at a stop
+      tags: [Departures]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10, maximum: 50 }
+      responses:
+        "200":
+          description: Upcoming departures
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Departure"
+
+  /v1/routes:
+    get:
+      summary: List routes by agency
+      tags: [Routes]
+      parameters:
+        - name: agency_id
+          in: query
+          required: true
+          schema: { type: string, example: metro_bilbao }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 500 }
+      responses:
+        "200":
+          description: Paginated list of routes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedRoutes"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/routes/{id}:
+    get:
+      summary: Get a route by ID
+      tags: [Routes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Route details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Route"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/routes/{id}/vehicles:
+    get:
+      summary: Live vehicle positions for a route
+      tags: [Realtime]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Current vehicle positions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VehiclePosition"
+
+  /graphql:
+    post:
+      summary: GraphQL endpoint
+      tags: [GraphQL]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string }
+                operationName: { type: string }
+                variables: { type: object }
+      responses:
+        "200":
+          description: GraphQL response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object }
+                  errors:
+                    type: array
+                    items:
+                      type: object
+
+  /v1/agencies/{slug}:
+    get:
+      summary: Get an agency by slug
+      tags: [Agencies]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string, example: metro_bilbao }
+      responses:
+        "200":
+          description: Agency details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/agencies/{slug}/routes:
+    get:
+      summary: List routes belonging to an agency
+      tags: [Agencies]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string, example: metro_bilbao }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 500 }
+      responses:
+        "200":
+          description: Paginated list of routes for the agency
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedRoutes"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/stops/{id}/routes:
+    get:
+      summary: List routes serving a stop
+      tags: [Stops]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Routes that pass through this stop
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Route"
+
+  /v1/trips/{id}:
+    get:
+      summary: Get a trip by ID
+      tags: [Trips]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Trip details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/trips/{id}/stop-times:
+    get:
+      summary: Get stop-times for a trip
+      tags: [Trips]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Ordered list of stop-times
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StopTime"
+
+  /v1/feeds/status:
+    get:
+      summary: GTFS feed statistics
+      tags: [System]
+      responses:
+        "200":
+          description: Current feed statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedStats"
+
+  /v1/journeys:
+    get:
+      summary: Plan a journey between two stops
+      description: |
+        Finds possible routes between two stops, including direct connections
+        and transfers. Supports lookup by stop UUID or stop name.
+      tags: [Journey Planner]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: uuid }
+          description: Origin stop UUID
+        - name: to
+          in: query
+          schema: { type: string, format: uuid }
+          description: Destination stop UUID
+        - name: from_name
+          in: query
+          schema: { type: string, example: Abando }
+          description: Origin stop name (alternative to from UUID)
+        - name: to_name
+          in: query
+          schema: { type: string, example: Sarriko }
+          description: Destination stop name (alternative to to UUID)
+        - name: depart_at
+          in: query
+          schema: { type: string, example: "08:30" }
+          description: "Departure time (HH:MM or ISO 8601)"
+        - name: max_transfers
+          in: query
+          schema: { type: integer, default: 1, maximum: 2 }
+      responses:
+        "200":
+          description: Journey options
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  journeys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        departure_time: { type: string, example: "08:32" }
+                        arrival_time: { type: string, example: "08:55" }
+                        duration: { type: string, example: "23m0s" }
+                        duration_minutes: { type: integer, example: 23 }
+                        transfers: { type: integer, example: 0 }
+                        legs:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              route:
+                                type: object
+                                properties:
+                                  id: { type: string }
+                                  short_name: { type: string }
+                                  long_name: { type: string }
+                                  color: { type: string }
+                                  route_type: { type: integer }
+                              from_stop:
+                                type: object
+                                properties:
+                                  id: { type: string }
+                                  name: { type: string }
+                                  location: { $ref: "#/components/schemas/GeoPoint" }
+                              to_stop:
+                                type: object
+                                properties:
+                                  id: { type: string }
+                                  name: { type: string }
+                                  location: { $ref: "#/components/schemas/GeoPoint" }
+                              departure_at: { type: string, example: "08:32" }
+                              arrival_at: { type: string, example: "08:55" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/agencies/{slug}/stats:
+    get:
+      summary: Get detailed statistics for an agency
+      tags: [Agencies]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string, example: metro_bilbao }
+      responses:
+        "200":
+          description: Agency with ingestion statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agency: { $ref: "#/components/schemas/Agency" }
+                  stats:
+                    type: object
+                    properties:
+                      stops: { type: integer }
+                      routes: { type: integer }
+                      trips: { type: integer }
+                      stop_times: { type: integer }
+                      last_sync: { type: string }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/routes/{id}/stops:
+    get:
+      summary: List all stops on a route (ordered)
+      tags: [Routes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Ordered list of stops served by this route
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    stop_id: { type: string }
+                    name: { type: string }
+                    location: { $ref: "#/components/schemas/GeoPoint" }
+                    sequence: { type: integer }
+
+components:
+  schemas:
+    GeoPoint:
+      type: object
+      properties:
+        lat: { type: number, format: double, example: 43.263 }
+        lon: { type: number, format: double, example: -2.935 }
+
+    Agency:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, example: metro_bilbao }
+        name: { type: string, example: Metro Bilbao }
+        url: { type: string }
+        timezone: { type: string, example: Europe/Madrid }
+        created_at: { type: string, format: date-time }
+
+    Stop:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        stop_id: { type: string }
+        agency_id: { type: string }
+        name: { type: string, example: "Abando Indalecio Prieto" }
+        location: { $ref: "#/components/schemas/GeoPoint" }
+        platform_code: { type: string }
+        wheelchair_accessible: { type: boolean }
+        distance: { type: number, description: "Distance in meters (nearby queries)" }
+        created_at: { type: string, format: date-time }
+
+    Route:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        route_id: { type: string }
+        agency_id: { type: string }
+        short_name: { type: string, example: L1 }
+        long_name: { type: string, example: "Etxebarri - Ibarbengoa" }
+        route_type: { type: integer }
+        color: { type: string, example: "FF0000" }
+        text_color: { type: string }
+        created_at: { type: string, format: date-time }
+
+    VehiclePosition:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        vehicle_id: { type: string }
+        trip_id: { type: string }
+        route_id: { type: string }
+        location: { $ref: "#/components/schemas/GeoPoint" }
+        bearing: { type: number }
+        speed: { type: number, description: "Speed in m/s" }
+
+    Departure:
+      type: object
+      properties:
+        trip:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            trip_id: { type: string }
+            headsign: { type: string }
+        scheduled_time: { type: string, format: date-time }
+        estimated_time: { type: string, format: date-time }
+        delay: { type: integer, description: "Delay in seconds" }
+        platform: { type: string }
+
+    Pagination:
+      type: object
+      properties:
+        offset: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+
+    PaginatedAgencies:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agency"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    PaginatedRoutes:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Route"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    APIError:
+      type: object
+      properties:
+        status: { type: integer, example: 400 }
+        code: { type: string, example: bad_request }
+        message: { type: string, example: "lat and lon are required" }
+        request_id: { type: string, format: uuid }
+
+    Trip:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        trip_id: { type: string }
+        route_id: { type: string }
+        service_id: { type: string }
+        headsign: { type: string }
+        direction_id: { type: integer }
+        shape_id: { type: string }
+        wheelchair_accessible: { type: boolean }
+        bikes_allowed: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    StopTime:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        trip_id: { type: string }
+        stop_id: { type: string }
+        arrival_time: { type: string, description: "Duration string (e.g. 8h30m0s)" }
+        departure_time: { type: string, description: "Duration string (e.g. 8h31m0s)" }
+        stop_sequence: { type: integer }
+        pickup_type: { type: integer }
+        drop_off_type: { type: integer }
+
+    FeedStats:
+      type: object
+      properties:
+        agencies: { type: integer, example: 35 }
+        stops: { type: integer, example: 9541 }
+        routes: { type: integer, example: 1656 }
+        trips: { type: integer, example: 242656 }
+        stop_times: { type: integer, example: 3598294 }
+        last_ingest: { type: string, description: "Timestamp of last ingestion" }
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/APIError"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/APIError"
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string, example: rate limit exceeded }
+              message: { type: string }

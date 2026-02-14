@@ -1,0 +1,85 @@
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+    - bodyclose
+    - noctx
+    - gosec
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - gocritic
+    - gofmt
+    - goimports
+    - misspell
+    - prealloc
+    - unconvert
+    - unparam
+    - whitespace
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - shadow
+      - fieldalignment
+  gosec:
+    excludes:
+      - G104  # unhandled errors (we handle them where it matters)
+  exhaustive:
+    default-signifies-exhaustive: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - hugeParam
+      - rangeValCopy
+  misspell:
+    locale: US
+
+run:
+  timeout: 5m
+  go: "1.24"
+  tests: true
+
+issues:
+  exclude-rules:
+    # Don't lint protobuf generated code
+    - path: "internal/gtfsrt/"
+      linters:
+        - gosec
+        - govet
+        - gocritic
+        - staticcheck
+        - unused
+        - errcheck
+    # Don't lint proto generated code
+    - path: "internal/proto/"
+      linters:
+        - gosec
+        - govet
+        - gocritic
+    # Test files can be less strict
+    - path: "_test\\.go"
+      linters:
+        - gosec
+        - errcheck
+        - unparam
+    # Workers are JS/Cloudflare — ignore
+    - path: "workers/"
+      linters:
+        - typecheck
+  max-issues-per-linter: 50
+  max-same-issues: 10
+
+output:
+  formats:
+    - format: colored-line-number
+  sort-results: true

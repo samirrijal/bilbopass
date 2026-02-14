@@ -1,0 +1,8 @@
+name = "bilbopass-stops-search"
+main = "stops-search.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bilbopass-stops"
+database_id = "<YOUR_D1_DATABASE_ID>"

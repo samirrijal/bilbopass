@@ -1,0 +1,34 @@
+# Binaries
+.env
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tools / build artifacts
+tools/
+protoc.zip
+tmp/
+dist/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Test
+coverage.out
+coverage.html
+
+# Docker volumes (local data)
+timescale_data/
+nats_data/
+valkey_data/

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bilbopass
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bilbopass-secrets
+  namespace: bilbopass
+type: Opaque
+stringData:
+  db-host: "timescale.bilbopass.svc.cluster.local"
+  db-password: "CHANGE_ME"
+  database-url: "postgres://transit:CHANGE_ME@timescale.bilbopass.svc.cluster.local:5432/bilbopass?sslmode=require"

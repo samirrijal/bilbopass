@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bilbopass-ingestor
+spec:
+  schedule: "0 3 * * *"  # Daily at 03:00 UTC
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: ingestor
+            image: ghcr.io/bilbopass/ingestor:latest
+            args: ["/config/manifest.json"]
+            env:
+            - name: BILBOPASS_DATABASE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: bilbopass-secrets
+                  key: db-host
+            - name: BILBOPASS_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bilbopass-secrets
+                  key: db-password
+            volumeMounts:
+            - name: config
+              mountPath: /config
+          volumes:
+          - name: config
+            configMap:
+              name: bilbopass-ingestor-config
+          restartPolicy: OnFailure
